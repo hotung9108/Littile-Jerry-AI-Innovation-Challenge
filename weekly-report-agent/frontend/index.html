@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8" />
+<title>Báo cáo tuần tự động</title>
+<style>
+  :root {
+    --bg: #f6f7fb;
+    --card: #ffffff;
+    --border: #e3e6ef;
+    --primary: #4f46e5;
+    --primary-dark: #3f37c9;
+    --text: #1f2333;
+    --muted: #6b7280;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+  }
+  header {
+    padding: 28px 32px;
+    background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+    color: white;
+  }
+  header h1 { margin: 0 0 4px; font-size: 22px; }
+  header p { margin: 0; opacity: 0.85; font-size: 14px; }
+
+  .container { max-width: 960px; margin: 0 auto; padding: 24px 20px 60px; }
+
+  .toolbar {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    align-items: center;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px;
+    margin-bottom: 20px;
+  }
+  .toolbar label { font-size: 13px; color: var(--muted); }
+  .toolbar select, .toolbar input {
+    padding: 6px 10px; border-radius: 8px; border: 1px solid var(--border);
+  }
+  button {
+    background: var(--primary);
+    color: white;
+    border: none;
+    padding: 10px 16px;
+    border-radius: 8px;
+    font-size: 14px;
+    cursor: pointer;
+  }
+  button:hover { background: var(--primary-dark); }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+  button.secondary { background: white; color: var(--primary); border: 1px solid var(--primary); }
+
+  #status { font-size: 13px; color: var(--muted); margin-bottom: 16px; min-height: 18px; }
+
+  .section {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 18px 20px;
+    margin-bottom: 14px;
+  }
+  .section h2 {
+    margin: 0 0 10px;
+    font-size: 15px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .section h2 .badge {
+    display: inline-flex;
+    width: 22px; height: 22px;
+    background: var(--primary);
+    color: white;
+    border-radius: 50%;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+  }
+  .section ul { margin: 0; padding-left: 20px; }
+  .section li { margin-bottom: 6px; font-size: 14px; line-height: 1.5; }
+  .empty { color: var(--muted); font-size: 13px; font-style: italic; }
+
+  .stats {
+    display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 20px;
+  }
+  .stat {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 10px; padding: 10px 16px; font-size: 13px; color: var(--muted);
+    flex: 1; min-width: 140px; text-align: center;
+  }
+  .stat strong { display: block; font-size: 20px; color: var(--text); }
+
+  #raw-data-preview {
+    max-height: 220px; overflow: auto; font-size: 12px;
+    background: #0f1117; color: #d1d5db; padding: 12px; border-radius: 8px;
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>📊 Báo cáo tuần tự động (Weekly Report Agent)</h1>
+  <p>Demo: Mock dữ liệu → Agent workflow chuẩn hóa/phân tích → Báo cáo tuần theo 6 mục</p>
+</header>
+
+<div class="container">
+  <div class="toolbar">
+    <div>
+      <label>Backend URL</label><br/>
+      <input id="apiBase" value="http://localhost:8000" size="26" />
+    </div>
+    <div>
+      <label>Nguồn dữ liệu</label><br/>
+      <select id="source">
+        <option value="mock" selected>Mock (giả lập Jira)</option>
+        <option value="jira">Jira thật</option>
+      </select>
+    </div>
+    <div>
+      <label>Số ngày</label><br/>
+      <input id="days" type="number" value="5" min="1" max="14" style="width:60px" />
+    </div>
+    <div style="margin-left:auto; display:flex; gap:10px;">
+      <button class="secondary" id="btnMock">1. Tạo dữ liệu mock</button>
+      <button id="btnGenerate">2. Tạo báo cáo tuần</button>
+    </div>
+  </div>
+
+  <div id="status"></div>
+
+  <div class="stats" id="stats" style="display:none;"></div>
+
+  <div id="report"></div>
+
+  <div class="section" id="raw-section" style="display:none;">
+    <h2><span class="badge">👁</span> Dữ liệu ngày (mock/jira) — xem trước</h2>
+    <pre id="raw-data-preview"></pre>
+  </div>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+
+function setStatus(msg, isError = false) {
+  const el = $("status");
+  el.textContent = msg;
+  el.style.color = isError ? "#dc2626" : "#6b7280";
+}
+
+async function apiCall(path, opts = {}) {
+  const base = $("apiBase").value.replace(/\/$/, "");
+  const res = await fetch(base + path, opts);
+  if (!res.ok) {
+    const detail = await res.text();
+    throw new Error(`${res.status} ${res.statusText}: ${detail}`);
+  }
+  return res.json();
+}
+
+$("btnMock").addEventListener("click", async () => {
+  const days = $("days").value;
+  setStatus("Đang sinh dữ liệu mock (mô phỏng Jira)...");
+  $("btnMock").disabled = true;
+  try {
+    const data = await apiCall(`/api/mock/generate?days=${days}&items_per_day=6`, { method: "POST" });
+    $("raw-section").style.display = "block";
+    $("raw-data-preview").textContent = JSON.stringify(data, null, 2);
+    setStatus(`Đã sinh dữ liệu mock cho ${data.length} ngày. Giờ có thể bấm "Tạo báo cáo tuần".`);
+  } catch (e) {
+    setStatus("Lỗi: " + e.message, true);
+  } finally {
+    $("btnMock").disabled = false;
+  }
+});
+
+function renderSection(id, icon, title, items) {
+  const list = items.length
+    ? `<ul>${items.map((b) => `<li>${escapeHtml(b)}</li>`).join("")}</ul>`
+    : `<p class="empty">Không có dữ liệu.</p>`;
+  return `<div class="section">
+    <h2><span class="badge">${icon}</span> ${title}</h2>
+    ${list}
+  </div>`;
+}
+
+function escapeHtml(str) {
+  const div = document.createElement("div");
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+function renderStats(stats) {
+  const map = [
+    ["Tổng công việc", stats.total_items],
+    ["Hoàn thành", stats.completed_count],
+    ["Đang thực hiện", stats.in_progress_count],
+    ["Khó khăn", stats.blockers_count],
+    ["Quyết định", stats.decisions_count],
+  ];
+  $("stats").style.display = "flex";
+  $("stats").innerHTML = map
+    .map(([label, val]) => `<div class="stat"><strong>${val}</strong>${label}</div>`)
+    .join("");
+}
+
+$("btnGenerate").addEventListener("click", async () => {
+  const source = $("source").value;
+  const days = $("days").value;
+  setStatus("Agent đang chạy: chuẩn hóa → phân tích → tổng hợp báo cáo...");
+  $("btnGenerate").disabled = true;
+  $("report").innerHTML = "";
+  try {
+    const report = await apiCall(`/api/reports/weekly?source=${source}&days=${days}`, { method: "POST" });
+    renderStats(report.raw_stats);
+    $("report").innerHTML =
+      renderSection("h", "1", "Kết quả nổi bật", report.highlights) +
+      renderSection("c", "2", "Công việc đã hoàn thành", report.completed) +
+      renderSection("p", "3", "Công việc đang thực hiện", report.in_progress) +
+      renderSection("b", "4", "Khó khăn", report.blockers) +
+      renderSection("d", "5", "Quyết định", report.decisions) +
+      renderSection("n", "6", "Công việc tiếp theo", report.next_steps);
+    setStatus(`Báo cáo tuần ${report.week_start} → ${report.week_end} (nguồn: ${report.source}) đã sẵn sàng.`);
+  } catch (e) {
+    setStatus("Lỗi: " + e.message, true);
+  } finally {
+    $("btnGenerate").disabled = false;
+  }
+});
+</script>
+</body>
+</html>
