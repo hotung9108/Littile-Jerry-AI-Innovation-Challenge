@@ -48,7 +48,7 @@ class JiraClient:
         fields = fields or [
             "summary", "assignee", "status", "priority", "issuetype",
             "project", "updated", "customfield_10016",  # story points (tuỳ workspace)
-            "comment",
+            "comment", "labels",
         ]
         params = {"jql": jql, "fields": ",".join(fields), "maxResults": 100}
         resp = requests.get(url, headers=self.headers, params=params, auth=self.auth, timeout=30)
@@ -59,6 +59,7 @@ class JiraClient:
         f = issue["fields"]
         status_name = f.get("status", {}).get("name", "To Do")
         status = STATUS_MAP.get(status_name, "In Progress")
+        labels = [l.lower() for l in f.get("labels", [])]
 
         comment_text = None
         blocker = None
@@ -77,12 +78,18 @@ class JiraClient:
             except Exception:
                 comment_text = None
 
-            if comment_text:
-                lowered = comment_text.lower()
-                if any(k in lowered for k in ["block", "chặn", "vướng", "khó khăn"]):
-                    blocker = comment_text
-                elif any(k in lowered for k in ["quyết định", "decide", "decision"]):
-                    decision = comment_text
+        # Ưu tiên nhãn Jira riêng (chính xác, do team tự gắn) — chỉ khi
+        # KHÔNG có nhãn phù hợp mới dò từ khóa trong comment (kém chính xác hơn).
+        if "blocker" in labels:
+            blocker = comment_text or f"Issue được gắn nhãn 'blocker': {f.get('summary', '')}"
+        elif "decision" in labels:
+            decision = comment_text or f"Issue được gắn nhãn 'decision': {f.get('summary', '')}"
+        elif comment_text:
+            lowered = comment_text.lower()
+            if any(k in lowered for k in ["block", "chặn", "vướng", "khó khăn"]):
+                blocker = comment_text
+            elif any(k in lowered for k in ["quyết định", "decide", "decision"]):
+                decision = comment_text
 
         return DailyReportItem(
             issue_key=issue["key"],
@@ -97,6 +104,7 @@ class JiraClient:
             comment=comment_text,
             blocker=blocker,
             decision=decision,
+            labels=f.get("labels", []),
         )
 
     def fetch_daily_reports(self, days: int = 5) -> List[DailyReport]:

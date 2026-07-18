@@ -24,6 +24,10 @@ class DailyReportItem(BaseModel):
     )
     blocker: Optional[str] = Field(default=None, description="Mô tả khó khăn/vướng mắc nếu có")
     decision: Optional[str] = Field(default=None, description="Quyết định được đưa ra nếu có")
+    labels: List[str] = Field(
+        default_factory=list,
+        description="Nhãn Jira gắn trên issue, vd: ['blocker'], ['decision']",
+    )
 
 
 class DailyReport(BaseModel):
@@ -38,9 +42,12 @@ class WeeklyReportSection(BaseModel):
 
 
 class WeeklyReport(BaseModel):
+    id: Optional[int] = Field(default=None, description="ID trong database (None nếu chưa lưu)")
     week_start: Date
     week_end: Date
     source: str = Field(..., description="mock | jira")
+    assignee_filter: Optional[str] = Field(default=None, description="Lọc theo thành viên (nếu có)")
+    project_filter: Optional[str] = Field(default=None, description="Lọc theo dự án (nếu có)")
     highlights: List[str] = Field(default_factory=list, description="1. Kết quả nổi bật")
     completed: List[str] = Field(default_factory=list, description="2. Công việc đã hoàn thành")
     in_progress: List[str] = Field(default_factory=list, description="3. Công việc đang thực hiện")

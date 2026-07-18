@@ -3,4 +3,19 @@ uvicorn[standard]==0.30.6
 pydantic==2.9.2
 python-dotenv==1.0.1
 requests==2.32.3
+
+# LLM (Groq dùng qua requests, Anthropic dùng SDK)
 anthropic==0.34.2
+
+# Database (Postgres) - chỉ cần nếu bạn set DATABASE_URL trong .env
+SQLAlchemy==2.0.35
+# psycopg2-binary==2.9.9
+
+# Cron scheduler cho báo cáo tuần tự động + quét rủi ro định kỳ
+APScheduler==3.10.4
+
+# --- Tuỳ chọn: chỉ cần khi bật kết nối dữ liệu THẬT cho Organizational Brain ---
+# slack_sdk==3.31.0                      # cho SlackSource (mode=real)
+# google-api-python-client==2.140.0      # cho GDocsSource (mode=real)
+# google-auth-httplib2==0.2.0
+# google-auth-oauthlib==1.2.1

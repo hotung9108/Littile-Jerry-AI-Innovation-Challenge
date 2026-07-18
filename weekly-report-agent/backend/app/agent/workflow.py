@@ -18,11 +18,23 @@ from app.agent.summarizer import summarize
 
 
 class WeeklyReportAgent:
-    def run(self, source: str = "mock", days: int = 5) -> WeeklyReport:
+    def run(
+        self,
+        source: str = "mock",
+        days: int = 5,
+        assignee: str = None,
+        project: str = None,
+    ) -> WeeklyReport:
         raw_reports: List[DailyReport] = self._fetch(source, days)
 
         # Bước 1: chuẩn hóa
         items = normalize_reports(raw_reports)
+
+        # Lọc theo thành viên/dự án nếu có nhiều team dùng chung hệ thống
+        if assignee:
+            items = [i for i in items if i.assignee.lower() == assignee.lower()]
+        if project:
+            items = [i for i in items if i.project.lower() == project.lower()]
 
         # Bước 2: phân tích
         buckets = analyze_items(items)
@@ -37,6 +49,8 @@ class WeeklyReportAgent:
             week_start=week_start,
             week_end=week_end,
             source=source,
+            assignee_filter=assignee,
+            project_filter=project,
             highlights=summary["highlights"],
             completed=summary["completed"],
             in_progress=summary["in_progress"],
